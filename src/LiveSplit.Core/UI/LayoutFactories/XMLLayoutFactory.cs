@@ -91,6 +91,7 @@ public class XMLLayoutFactory : ILayoutFactory
         }
 
         settings.BackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImage"]);
+        settings.BackgroundFolder = SettingsHelper.ParseString(element["BackgroundFolder"]);
 
         return settings;
     }

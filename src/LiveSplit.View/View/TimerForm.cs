@@ -82,6 +82,8 @@ public partial class TimerForm : Form
 
     private bool DontRedraw = false;
 
+    private string RandomImageFilePath { get; set; }
+
     protected Region UpdateRegion { get; set; }
 
     public const int WM_NCLBUTTONDOWN = 0xA1;
@@ -89,6 +91,8 @@ public partial class TimerForm : Form
     public const string SETTINGS_PATH = "settings.cfg";
     private const int WS_MINIMIZEBOX = 0x20000;
     private const int CS_DBLCLKS = 0x8;
+
+    private Random _random;
 
     protected override CreateParams CreateParams
     {
@@ -180,6 +184,10 @@ public partial class TimerForm : Form
 
     private void Init(string splitsPath = null, string layoutPath = null)
     {
+        _random = new Random();
+
+        RandomImageFilePath = "";
+
         LiveSplitCoreFactory.LoadLiveSplitCore();
 
         SetWindowTitle();
@@ -211,6 +219,7 @@ public partial class TimerForm : Form
 
         UpdateRecentSplits();
         UpdateRecentLayouts();
+        UpdateRandomImage();
 
         IRun timerOnlyRun = new StandardRunFactory().Create(ComparisonGeneratorsFactory);
 
@@ -317,12 +326,84 @@ public partial class TimerForm : Form
         TopMost = Layout.Settings.AlwaysOnTop;
         BackColor = Color.Black;
 
+        GenerateRandomImage();
+
         Server = new CommandServer(CurrentState);
         Server.StartNamedPipe();
 
         new System.Timers.Timer(1000) { Enabled = true }.Elapsed += PerSecondTimer_Elapsed;
 
         InitDragAndDrop();
+    }
+
+    private void UpdateRandomImage()
+    {
+        var randomizeImageMenuItem = new ToolStripMenuItem("Randomize Image");
+        randomizeImageMenuItem.Click += randomImageMenuItem_Click;
+        randomImageMenuItem.DropDownItems.Add(randomizeImageMenuItem);
+        var openRandomImageMenuItem = new ToolStripMenuItem("Open Image");
+        openRandomImageMenuItem.Click += openRandomImageMenuItem_Click;
+        randomImageMenuItem.DropDownItems.Add(openRandomImageMenuItem);
+    }
+
+    private void SetBackgroundImage(string filePath)
+    {
+        try
+        {
+            Layout.Settings.BackgroundImage = Image.FromFile(filePath);
+            Layout.Settings.BackgroundType = BackgroundType.Image;
+        }
+        catch
+        {
+            MessageBox.Show("Random Image failed to load!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+    }
+
+    public void GenerateRandomImage()
+    {
+        if (Layout.Settings.BackgroundType != BackgroundType.RandomImage)
+            return;
+
+        if (Layout.Settings.BackgroundFolder == null)
+            return;
+
+        new Thread(DoRandomImageSelectionThread).Start();
+    }
+
+    public void DoRandomImageSelectionThread()
+    {
+        string[] files;
+        try
+        {
+            files = Directory.GetFiles(Layout.Settings.BackgroundFolder);
+        }
+        catch
+        {
+            MessageBox.Show("Failed to get files in the directory!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Invoke(new Action(() => Layout.Settings.BackgroundType = BackgroundType.SolidColor));
+            return;
+        }
+
+        int thing = _random.Next(0, files.Length);
+        try
+        {
+            var image = Image.FromFile(files[thing]);
+
+            Invoke(new Action(() =>
+            {
+                var oldImage = Layout.Settings.BackgroundImage;
+                Layout.Settings.BackgroundImage = image;
+                RandomImageFilePath = files[thing];
+
+                oldImage?.Dispose();
+            }));
+        }
+        catch
+        {
+            MessageBox.Show("Random Image failed to load!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Invoke(new Action(() => Layout.Settings.BackgroundType = BackgroundType.SolidColor));
+        }
     }
 
     private void InitDragAndDrop()
@@ -756,6 +837,7 @@ public partial class TimerForm : Form
 
             undoSplitMenuItem.Enabled = true;
         });
+        GenerateRandomImage();
     }
 
     private void CurrentState_OnStart(object sender, EventArgs e)
@@ -768,6 +850,7 @@ public partial class TimerForm : Form
             skipSplitMenuItem.Enabled = true;
             splitMenuItem.Text = "Split";
         });
+        GenerateRandomImage();
     }
 
     private void CurrentState_OnReset(object sender, TimerPhase e)
@@ -1454,7 +1537,7 @@ public partial class TimerForm : Form
 
     private void DrawBackground(Graphics g)
     {
-        if (Layout.Settings.BackgroundType == BackgroundType.Image)
+        if (Layout.Settings.BackgroundType == BackgroundType.Image || Layout.Settings.BackgroundType == BackgroundType.RandomImage)
         {
             if (Layout.Settings.BackgroundImage != null)
             {
@@ -2540,6 +2623,18 @@ public partial class TimerForm : Form
     {
         SaveSplitsAs(true);
     }
+    private void randomImageMenuItem_Click(object sender, EventArgs e)
+    {
+        GenerateRandomImage();
+    }
+
+    private void openRandomImageMenuItem_Click(object sender, EventArgs e)
+    {
+        if (File.Exists(RandomImageFilePath))
+        {
+            Process.Start("explorer.exe", "/select, " + RandomImageFilePath);
+        }
+    }
 
     private void saveSplitsMenuItem_Click(object sender, EventArgs e)
     {
@@ -3159,6 +3254,7 @@ public partial class TimerForm : Form
         {
             bool lssOpened = false;
             bool lslOpened = false;
+            bool imgOpened = false;
 
             foreach (string fileToOpen in fileList)
             {
@@ -3175,6 +3271,11 @@ public partial class TimerForm : Form
                     {
                         lssOpened = true;
                         OpenRunFromFile(fileToOpen);
+                    }
+                    else if (!imgOpened && (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".jfif"))
+                    {
+                        imgOpened = true;
+                        SetBackgroundImage(fileToOpen);
                     }
                 }
             }
@@ -3195,4 +3296,9 @@ public partial class TimerForm : Form
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetProcessDPIAware();
+
+    private void randomImageMenuItem_Click_1(object sender, EventArgs e)
+    {
+        GenerateRandomImage();
+    }
 }

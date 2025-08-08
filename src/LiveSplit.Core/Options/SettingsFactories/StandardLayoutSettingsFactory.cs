@@ -35,6 +35,7 @@ public class StandardLayoutSettingsFactory : ILayoutSettingsFactory
             DropShadows = true,
             BackgroundType = BackgroundType.SolidColor,
             BackgroundImage = null,
+            BackgroundFolder = null,
             ImageOpacity = 1f,
             ImageBlur = 0f,
             Opacity = 1,

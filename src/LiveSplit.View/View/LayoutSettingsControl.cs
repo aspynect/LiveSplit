@@ -1,9 +1,11 @@
 ﻿using System;
+using System.IO;
 using System.Drawing;
 using System.Windows.Forms;
 
 using LiveSplit.Options;
 using LiveSplit.UI;
+using Microsoft.WindowsAPICodePack.Dialogs;
 
 namespace LiveSplit.View;
 
@@ -71,6 +73,7 @@ public partial class LayoutSettingsControl : UserControl
             BackgroundType.HorizontalGradient => "Horizontal Gradient",
             BackgroundType.VerticalGradient => "Vertical Gradient",
             BackgroundType.Image => "Image",
+            BackgroundType.RandomImage => "Random Image",
             _ => "Solid Color",
         };
     }
@@ -78,14 +81,20 @@ public partial class LayoutSettingsControl : UserControl
     private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
     {
         string selectedItem = cmbBackgroundType.SelectedItem.ToString();
-        btnBackground.Visible = selectedItem is not "Solid Color" and not "Image";
+        btnBackground.Visible = selectedItem is not "Solid Color" and not "Image" and not "Random Image";
         btnBackground2.DataBindings.Clear();
-        lblImageOpacity.Enabled = lblBlur.Enabled = trkImageOpacity.Enabled = trkBlur.Enabled = selectedItem == "Image";
+        lblImageOpacity.Enabled = lblBlur.Enabled = trkImageOpacity.Enabled = trkBlur.Enabled = selectedItem == "Image" || selectedItem == "Random Image";
         if (selectedItem == "Image")
         {
             btnBackground2.BackgroundImage = Settings.BackgroundImage;
             btnBackground2.BackColor = Color.Transparent;
             lblBackground.Text = "Image:";
+        }
+        else if (selectedItem == "Random Image")
+        {
+            btnBackground2.BackgroundImage = null;
+            btnBackground2.BackColor = Color.Transparent;
+            lblBackground.Text = "Folder:";
         }
         else
         {
@@ -128,6 +137,27 @@ public partial class LayoutSettingsControl : UserControl
                 {
                     Log.Error(ex);
                     MessageBox.Show("Could not load image!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+        else if (cmbBackgroundType.SelectedItem.ToString() == "Random Image")
+        {
+            var dialog = new CommonOpenFileDialog();
+            dialog.IsFolderPicker = true;
+            var result = dialog.ShowDialog();
+            if (result == CommonFileDialogResult.Ok && !string.IsNullOrWhiteSpace(dialog.FileName))
+            {
+                Settings.BackgroundFolder = dialog.FileName;
+                string[] files = Directory.GetFiles(dialog.FileName);
+                Random random = new Random();
+                int thing = random.Next(0, files.Length);
+                try
+                {
+                    Settings.BackgroundImage = Image.FromFile(files[thing]);
+                }
+                catch
+                {
+                    MessageBox.Show("Random Image failed to load!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
